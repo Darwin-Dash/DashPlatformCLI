@@ -1,0 +1,27 @@
+{
+    "name": "dash-platform-cli",
+    "version": "1.0.0",
+    "description": "CLI tool for Dash Platform operations",
+    "main": "dashCLI.js",
+    "scripts": {
+        "start": "node dashCLI.js",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage"
+    },
+    "jest": {
+        "testEnvironment": "node"
+    },
+    "engines": {
+        "node": ">=20.0.0"
+    },
+    "dependencies": {
+        "commander": "^12.1.0",
+        "dash": "^4.7.1",
+        "dotenv": "^16.4.5"
+    },
+    "devDependencies": {
+        "@types/jest": "^29.5.14",
+        "jest": "^29.7.0"
+    }
+}
