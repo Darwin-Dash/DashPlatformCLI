@@ -18,6 +18,28 @@ const getDapiAddresses = (network = 'mainnet') => {
 
 // Main client factory function that creates configured Dash SDK client instances
 // Uses environment variables and command line args to configure the client
+const walletClient = (args = {}) => {
+  const clientOpts = {
+    wallet: {
+      unsafeOptions: {
+        skipSynchronizationBeforeHeight: args.height || 0
+      }
+    },
+    network: args.network !== undefined ? args.network : 
+            process.env.NETWORK !== undefined ? process.env.NETWORK : 
+            'mainnet'
+  };
+
+  if (!process.env.MNEMONIC) {
+    clientOpts.wallet.mnemonic = null;
+    clientOpts.wallet.offlineMode = true;
+  } else {
+    clientOpts.wallet.mnemonic = process.env.MNEMONIC;
+  }
+
+  return new Dash.Client(clientOpts);
+};
+
 const dashClient = (args = {}) => {
   const clientOpts = {
     wallet: {},
@@ -82,6 +104,18 @@ const dashClient = (args = {}) => {
     console.log('[DEBUG] Using apps configuration:', JSON.stringify(clientOpts.apps, null, 2));
   }
 
-  return new Dash.Client(clientOpts);
+  const client = new Dash.Client(clientOpts);
+  
+  // Add cleanup handler
+  process.on('beforeExit', async () => {
+    if (client) {
+      await client.disconnect();
+    }
+  });
+
+  return client;
 };
-module.exports = dashClient;
+module.exports = {
+  dashClient,
+  walletClient
+};

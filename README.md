@@ -53,6 +53,10 @@ npm install
 - `retrieveDocuments` - Get documents from a contract
 - `deleteDocument` - Delete a document (alternative to `submitDocument --action delete `)
 
+### Key Management Operations:
+- `listIdentityPublicKeys` - List all public keys associated with an identity
+- `getPrivateKeyFromPublicKey` - Retrieve private key for a given public key ID
+
 ## Common Command Options:
 - `--network <network>` - Select network (mainnet/testnet)
 - `--identity-id <id>` - Specify identity ID
@@ -269,6 +273,18 @@ node dashCLI.js retrieveDocuments --network testnet \
   --contract-id <your-contract-id> \
   --document-type <document-type> \
   --document-id <your-document-id>
+```
+
+### Key Management:
+#### List identity public keys:
+```bash
+node dashCLI.js listIdentityPublicKeys --network testnet --identity-id <your-identity-id>
+```
+
+#### Get private key for a public key:
+```bash
+node dashCLI.js getPrivateKeyFromPublicKey --network testnet --identity-id <your-identity-id> --public-key-id <public-key-id>
+```
 
 ## Environment Variables
 

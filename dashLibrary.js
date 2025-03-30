@@ -1,5 +1,5 @@
-const dashClient = require('./dashClient');
-const util = require('util');
+const { dashClient, walletClient } = require("./dashClient");
+const util = require("util");
 
 // Helper functions to get IDs from either command line args or environment variables
 // This provides flexibility in how IDs are provided to the CLI
@@ -17,11 +17,11 @@ const IDENTITY_NAME_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$/;
 const validateIdentityName = (name) => {
   if (!IDENTITY_NAME_REGEX.test(name)) {
     throw new Error(
-      'Invalid identity name. Name must:\n' +
-      '- Start with a letter or number\n' +
-      '- End with a letter or number\n' +
-      '- Contain only letters, numbers, and hyphens\n' +
-      '- Be between 2 and 63 characters long'
+      "Invalid identity name. Name must:\n" +
+        "- Start with a letter or number\n" +
+        "- End with a letter or number\n" +
+        "- Contain only letters, numbers, and hyphens\n" +
+        "- Be between 2 and 63 characters long",
     );
   }
   return true;
@@ -35,15 +35,15 @@ const validateIndices = (indices) => {
     indices = [indices];
   }
 
-  indices.forEach(index => {
+  indices.forEach((index) => {
     if (!index.name) {
-      throw new Error('Index must have a name');
+      throw new Error("Index must have a name");
     }
     if (!index.properties || !Array.isArray(index.properties)) {
-      throw new Error('Index must have properties array');
+      throw new Error("Index must have properties array");
     }
-    if (typeof index.unique !== 'boolean') {
-      throw new Error('Index must specify unique as boolean');
+    if (typeof index.unique !== "boolean") {
+      throw new Error("Index must specify unique as boolean");
     }
   });
   return indices;
@@ -53,39 +53,46 @@ const validateIndices = (indices) => {
 // Ensures the contract follows Dash Platform specification
 const validateContractDefinition = (contractDef) => {
   // Handle both string and object input formats
-  const def = typeof contractDef === 'string' ? JSON.parse(contractDef) : contractDef;
+  const def =
+    typeof contractDef === "string" ? JSON.parse(contractDef) : contractDef;
 
   // Basic structure validation
-  if (!def || typeof def !== 'object' || Object.keys(def).length === 0) {
-    throw new Error('Contract must define at least one document type');
+  if (!def || typeof def !== "object" || Object.keys(def).length === 0) {
+    throw new Error("Contract must define at least one document type");
   }
 
   // Validate each document type definition
   Object.entries(def).forEach(([docType, schema]) => {
     // Each document type must be an object
-    if (schema.type !== 'object') {
+    if (schema.type !== "object") {
       throw new Error(`Document type '${docType}' must have type:'object'`);
     }
 
     // Properties object is required and must be properly structured
-    if (!schema.properties || typeof schema.properties !== 'object') {
+    if (!schema.properties || typeof schema.properties !== "object") {
       throw new Error(`Document type '${docType}' must define properties`);
     }
 
     // Validate each property has required fields
     Object.entries(schema.properties).forEach(([propName, propDef]) => {
       if (!propDef.type) {
-        throw new Error(`Property '${propName}' in '${docType}' must have type`);
+        throw new Error(
+          `Property '${propName}' in '${docType}' must have type`,
+        );
       }
       // Position is required for backwards compatibility in contract updates
-      if (typeof propDef.position !== 'number') {
-        throw new Error(`Property '${propName}' in '${docType}' must have numeric position`);
+      if (typeof propDef.position !== "number") {
+        throw new Error(
+          `Property '${propName}' in '${docType}' must have numeric position`,
+        );
       }
     });
 
     // additionalProperties must be explicitly set for schema validation
-    if (typeof schema.additionalProperties !== 'boolean') {
-      throw new Error(`Document type '${docType}' must specify additionalProperties as boolean`);
+    if (typeof schema.additionalProperties !== "boolean") {
+      throw new Error(
+        `Document type '${docType}' must specify additionalProperties as boolean`,
+      );
     }
   });
 
@@ -99,40 +106,44 @@ const validateContractDefinition = (contractDef) => {
 //1. RPC API (primary) - Faster but may have temporary issues
 //2. Insight API (fallback) - More stable but slower
 const findStartHeight = async (args) => {
-  console.log('Finding the first transaction block for address');
+  console.log("Finding the first transaction block for address");
   const address = getAddress(args);
   if (!address) {
-    throw new Error('Address is required for this operation');
+    throw new Error("Address is required for this operation");
   }
-  
+
   // Determine network with fallback chain: CLI args -> Environment -> Default mainnet
-  const network = args.network || process.env.NETWORK || 'mainnet';
+  const network = args.network || process.env.NETWORK || "mainnet";
 
   try {
     // Define API endpoints based on network
-    const insightApi = network === 'testnet' 
-      ? 'https://insight.testnet.networks.dash.org/insight-api'
-      : 'https://insight.dash.org/insight-api';
+    const insightApi =
+      network === "testnet"
+        ? "https://insight.testnet.networks.dash.org/insight-api"
+        : "https://insight.dash.org/insight-api";
 
-    const rpcUrl = network === 'testnet'
-      ? 'https://trpc.digitalcash.dev/'
-      : 'https://rpc.digitalcash.dev/';
+    const rpcUrl =
+      network === "testnet"
+        ? "https://trpc.digitalcash.dev/"
+        : "https://rpc.digitalcash.dev/";
 
     // PRIMARY: Try RPC API first (faster)
     try {
       console.log(`Trying ${rpcUrl}...`);
       // Step 1: Get all transaction IDs for the address
       const txidsResponse = await fetch(rpcUrl, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          method: 'getaddresstxids',
-          params: [{
-            addresses: [address]
-          }]
-        })
+          method: "getaddresstxids",
+          params: [
+            {
+              addresses: [address],
+            },
+          ],
+        }),
       });
 
       // Check for RPC API errors
@@ -143,8 +154,12 @@ const findStartHeight = async (args) => {
       const txidsData = await txidsResponse.json();
 
       // Validate transaction data exists
-      if (!txidsData.result || !Array.isArray(txidsData.result) || txidsData.result.length === 0) {
-        throw new Error('No transactions found in RPC response');
+      if (
+        !txidsData.result ||
+        !Array.isArray(txidsData.result) ||
+        txidsData.result.length === 0
+      ) {
+        throw new Error("No transactions found in RPC response");
       }
 
       // Get the first (oldest) transaction ID
@@ -152,35 +167,43 @@ const findStartHeight = async (args) => {
 
       // Step 2: Get detailed transaction data to find block height
       const txResponse = await fetch(rpcUrl, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          method: 'getrawtransaction',
-          params: [firstTxId, true]
-        })
+          method: "getrawtransaction",
+          params: [firstTxId, true],
+        }),
       });
 
       // Check for transaction lookup errors
       if (!txResponse.ok) {
-        throw new Error(`RPC API returned status ${txResponse.status} for transaction lookup`);
+        throw new Error(
+          `RPC API returned status ${txResponse.status} for transaction lookup`,
+        );
       }
 
       const txData = await txResponse.json();
 
       // Validate block height exists and is valid
-      if (!txData.result || !txData.result.height || txData.result.height <= 0) {
-        throw new Error('Invalid or missing block height in transaction data');
+      if (
+        !txData.result ||
+        !txData.result.height ||
+        txData.result.height <= 0
+      ) {
+        throw new Error("Invalid or missing block height in transaction data");
       }
 
       console.log(`First transaction ID: ${firstTxId}`);
       console.log(`Found in block: ${txData.result.height}`);
       return txData.result.height;
-
     } catch (rpcError) {
       // If RPC fails, log error and try Insight API
-      console.log('RPC API attempt failed, falling back to Insight API...', rpcError.message);
+      console.log(
+        "RPC API attempt failed, falling back to Insight API...",
+        rpcError.message,
+      );
 
       // FALLBACK: Try Insight API
       try {
@@ -196,8 +219,13 @@ const findStartHeight = async (args) => {
         const data = await response.json();
 
         // Validate address has transactions
-        if (!data || !data.transactions || !Array.isArray(data.transactions) || data.transactions.length === 0) {
-          throw new Error('No transactions found in Insight API response');
+        if (
+          !data ||
+          !data.transactions ||
+          !Array.isArray(data.transactions) ||
+          data.transactions.length === 0
+        ) {
+          throw new Error("No transactions found in Insight API response");
         }
 
         // Get transactions in reverse order (oldest first)
@@ -208,14 +236,18 @@ const findStartHeight = async (args) => {
         const firstTxResponse = await fetch(`${insightApi}/tx/${txs[0]}`);
 
         if (!firstTxResponse.ok) {
-          throw new Error(`Insight API returned status ${firstTxResponse.status} for transaction lookup`);
+          throw new Error(
+            `Insight API returned status ${firstTxResponse.status} for transaction lookup`,
+          );
         }
 
         const firstTx = await firstTxResponse.json();
 
         // Validate block height exists and is valid
         if (!firstTx || !firstTx.blockheight || firstTx.blockheight <= 0) {
-          throw new Error('Invalid or missing block height in transaction data');
+          throw new Error(
+            "Invalid or missing block height in transaction data",
+          );
         }
 
         console.log(`First transaction ID: ${txs[0]}`);
@@ -223,7 +255,9 @@ const findStartHeight = async (args) => {
         return firstTx.blockheight;
       } catch (insightError) {
         // If both APIs fail for valid reasons (e.g., new address with no transactions)
-        throw new Error('No transactions found for this address. Please verify the address is correct and has transaction history.');
+        throw new Error(
+          "No transactions found for this address. Please verify the address is correct and has transaction history.",
+        );
       }
     }
   } catch (error) {
@@ -235,7 +269,7 @@ const findStartHeight = async (args) => {
 // Helper function to get current best block height
 // Used for optimizing wallet sync
 const getBestBlockHeight = async (args) => {
-  const client = dashClient({ ...args, height: undefined });
+  const client = dashClient({ ...args });
   try {
     const height = await client.getDAPIClient().core.getBestBlockHeight();
     return height;
@@ -246,13 +280,13 @@ const getBestBlockHeight = async (args) => {
 
 const getUnusedAddress = async (args) => {
   if (!process.env.MNEMONIC) {
-    throw new Error('No wallet mnemonic configured');
+    throw new Error("No wallet mnemonic configured");
   }
 
   const height = await getBestBlockHeight(args);
   const client = dashClient({ ...args, height });
   try {
-    console.log('Getting wallet account, please wait...')
+    console.log("Getting wallet account, please wait...");
     const account = await client.getWalletAccount();
     const address = account.getUnusedAddress();
     return { address: address.address };
@@ -262,7 +296,6 @@ const getUnusedAddress = async (args) => {
 };
 
 const createWallet = async (args) => {
-  
   const client = dashClient(args);
   try {
     const account = await client.getWalletAccount();
@@ -276,27 +309,25 @@ const createWallet = async (args) => {
 const createIdentity = async (args) => {
   const address = getAddress(args);
   if (!address) {
-    throw new Error('Address is required for creating an identity');
+    throw new Error("Address is required for creating an identity");
   }
   const height = await findStartHeight(args);
   const client = dashClient({ ...args, height });
   try {
-    console.log('Creating identity. Please wait while the core chain syncs...')
+    console.log("Creating identity. Please wait while the core chain syncs...");
     const identity = await client.platform.identities.register();
     return identity.toJSON();
   } catch (error) {
     throw new Error(`Failed to create identity: ${error.message}`);
   } finally {
-    if (client && client.disconnect) {
-      await client.disconnect();
-    }
+    await client.disconnect();
   }
 };
 
 const retrieveIdentity = async (args) => {
   const identityId = getIdentityId(args);
   if (!identityId) {
-    throw new Error('Identity ID is required.');
+    throw new Error("Identity ID is required.");
   }
   const client = dashClient(args);
   try {
@@ -315,26 +346,32 @@ const topupIdentity = async (args) => {
 
   // Validate required params
   if (!identityId) {
-    throw new Error('Identity ID is required.');
+    throw new Error("Identity ID is required.");
   }
 
   if (!address) {
-    throw new Error('Address is required.');
+    throw new Error("Address is required.");
   }
 
   if (!topupAmount) {
-    throw new Error(`Topup amount is required. Minimum ${MINIMUM_TOPUP_AMOUNT} duffs = 50000000 credits`);
+    throw new Error(
+      `Topup amount is required. Minimum ${MINIMUM_TOPUP_AMOUNT} duffs = 50000000 credits`,
+    );
   }
 
   const parsedAmount = parseInt(topupAmount);
   if (parsedAmount < MINIMUM_TOPUP_AMOUNT) {
-    throw new Error(`Topup amount must be at least ${MINIMUM_TOPUP_AMOUNT} duffs = 50000000 credits`);
+    throw new Error(
+      `Topup amount must be at least ${MINIMUM_TOPUP_AMOUNT} duffs = 50000000 credits`,
+    );
   }
 
   const height = await findStartHeight(args);
   const client = dashClient({ ...args, height });
   try {
-    console.log('Topping up identity. Please wait while the core chain syncs...')
+    console.log(
+      "Topping up identity. Please wait while the core chain syncs...",
+    );
     await client.platform.identities.topUp(identityId, parsedAmount);
     const updatedIdentity = await client.platform.identities.get(identityId);
     return updatedIdentity.toJSON();
@@ -345,16 +382,16 @@ const topupIdentity = async (args) => {
 
 const registerName = async (args) => {
   if (!args.identityName) {
-    throw new Error('Identity Name is required.');
+    throw new Error("Identity Name is required.");
   }
   const height = await getBestBlockHeight(args);
   validateIdentityName(args.identityName);
-  
+
   const client = dashClient({ ...args, height });
   try {
     const identityId = getIdentityId(args);
     const identity = await client.platform.identities.get(identityId);
-    console.log('Registering name. Please wait...')
+    console.log("Registering name. Please wait...");
     const nameRegistration = await client.platform.names.register(
       `${args.identityName}.dash`,
       { identity: identity.getId() },
@@ -381,13 +418,13 @@ const getIdentityIds = async (args) => {
 const registerContract = async (args) => {
   const identityId = getIdentityId(args);
   if (!identityId) {
-    throw new Error('Identity ID is required.');
+    throw new Error("Identity ID is required.");
   }
   const height = await getBestBlockHeight(args);
   const client = dashClient({ ...args, height });
   try {
     const identity = await client.platform.identities.get(identityId);
-    
+
     // Validate and parse contract definition
     validateContractDefinition(args.contractDef);
     const documents = JSON.parse(args.contractDef);
@@ -397,35 +434,40 @@ const registerContract = async (args) => {
       try {
         const newIndices = JSON.parse(args.indices);
         const validatedIndices = validateIndices(newIndices);
-        
-        Object.keys(documents).forEach(docType => {
+
+        Object.keys(documents).forEach((docType) => {
           if (!args.documentType || docType === args.documentType) {
             documents[docType].indices = documents[docType].indices || [];
-            documents[docType].indices = [...documents[docType].indices, ...validatedIndices];
+            documents[docType].indices = [
+              ...documents[docType].indices,
+              ...validatedIndices,
+            ];
           }
         });
       } catch (e) {
         throw new Error(`Invalid indices format: ${e.message}`);
       }
     }
-    
-    const contract = await client.platform.contracts.create(documents, identity);
-    
+
+    const contract = await client.platform.contracts.create(
+      documents,
+      identity,
+    );
+
     if (args.keepHistory) {
       contract.setConfig({
         keepsHistory: true,
       });
     }
-    
+
     await client.platform.contracts.publish(contract, identity);
-    return util.inspect(contract.toJSON(), {depth: null, colors: true});
+    return util.inspect(contract.toJSON(), { depth: null, colors: true });
   } finally {
     await client.disconnect();
   }
 };
 
 const updateContract = async (args) => {
-  
   const height = await getBestBlockHeight(args);
   const client = dashClient({ ...args, height });
   try {
@@ -433,50 +475,57 @@ const updateContract = async (args) => {
     const contractId = getContractId(args);
 
     if (!identityId) {
-      throw new Error('Identity ID is required.');
+      throw new Error("Identity ID is required.");
     }
     if (!contractId) {
-      throw new Error('Contract ID is required.');
+      throw new Error("Contract ID is required.");
     }
 
     const identity = await client.platform.identities.get(identityId);
     const existingContract = await client.platform.contracts.get(contractId);
-    
+
     // Get the existing document schema
-    const documentSchema = existingContract.getDocumentSchema(args.documentType);
+    const documentSchema = existingContract.getDocumentSchema(
+      args.documentType,
+    );
     if (!documentSchema) {
-      throw new Error(`Document type "${args.documentType}" not found in contract`);
+      throw new Error(
+        `Document type '${args.documentType}' not found in contract`,
+      );
     }
 
     // Create a deep copy of the existing schema to work with
     const updatedSchema = JSON.parse(JSON.stringify(documentSchema));
-    
+
     // Parse and add new properties from JSON string
     if (args.newProperties) {
       const newProperties = JSON.parse(args.newProperties);
-      
+
       // Validate that new property positions don't conflict with existing ones
       const existingPositions = new Set(
-        Object.values(updatedSchema.properties)
-          .map(prop => prop.position)
+        Object.values(updatedSchema.properties).map((prop) => prop.position),
       );
-      
+
       Object.entries(newProperties).forEach(([propName, propDef]) => {
         if (existingPositions.has(propDef.position)) {
-          throw new Error(`Position ${propDef.position} is already used by another property`);
+          throw new Error(
+            `Position ${propDef.position} is already used by another property`,
+          );
         }
-        if (typeof propDef.position !== 'number') {
-          throw new Error(`Property "${propName}" must have a numeric position`);
+        if (typeof propDef.position !== "number") {
+          throw new Error(
+            `Property '${propName}' must have a numeric position`,
+          );
         }
         if (!propDef.type) {
-          throw new Error(`Property "${propName}" must have a type`);
+          throw new Error(`Property '${propName}' must have a type`);
         }
       });
 
       // Merge new properties with existing ones
       updatedSchema.properties = {
         ...updatedSchema.properties,
-        ...newProperties
+        ...newProperties,
       };
     }
 
@@ -494,13 +543,16 @@ const updateContract = async (args) => {
       updatedSchema.indices = updatedSchema.indices || [];
       updatedSchema.indices = [...updatedSchema.indices, ...newIndices];
     }
-    
+
     // Update the contract with the modified schema
     existingContract.setDocumentSchema(args.documentType, updatedSchema);
-    
+
     // Sign and submit the updated contract
     await client.platform.contracts.update(existingContract, identity);
-    return util.inspect(existingContract.toJSON(), {depth: null, colors: true});
+    return util.inspect(existingContract.toJSON(), {
+      depth: null,
+      colors: true,
+    });
   } catch (error) {
     throw new Error(`Failed to update contract: ${error.message}`);
   } finally {
@@ -511,7 +563,7 @@ const updateContract = async (args) => {
 const retrieveContract = async (args) => {
   const contractId = getContractId(args);
   if (!contractId) {
-    throw new Error('Contract ID is required.');
+    throw new Error("Contract ID is required.");
   }
   const height = await getBestBlockHeight(args);
   const client = dashClient({ ...args, height });
@@ -520,8 +572,8 @@ const retrieveContract = async (args) => {
     if (!contract) {
       throw new Error(`Contract not found with ID: ${contractId}`);
     }
-    
-    return util.inspect(contract.toJSON(), {depth: null, colors: true});
+
+    return util.inspect(contract.toJSON(), { depth: null, colors: true });
   } catch (error) {
     throw new Error(`Failed to retrieve contract: ${error.message}`);
   } finally {
@@ -532,16 +584,21 @@ const retrieveContract = async (args) => {
 const retrieveContractHistory = async (args) => {
   const contractId = getContractId(args);
   if (!contractId) {
-    throw new Error('Contract ID is required.');
+    throw new Error("Contract ID is required.");
   }
   const client = dashClient(args);
   try {
-    const history = await client.platform.contracts.history(contractId, 0, 10, 0);
+    const history = await client.platform.contracts.history(
+      contractId,
+      0,
+      10,
+      0,
+    );
     const formattedHistory = {};
     Object.entries(history).forEach(([timestamp, contract]) => {
       formattedHistory[timestamp] = contract.toJSON();
     });
-    return util.inspect(formattedHistory, {depth: null, colors: true});
+    return util.inspect(formattedHistory, { depth: null, colors: true });
     return history;
   } finally {
     await client.disconnect();
@@ -553,47 +610,46 @@ const submitDocument = async (args) => {
   const contractId = getContractId(args);
 
   if (!identityId) {
-    throw new Error('Identity ID is required.');
+    throw new Error("Identity ID is required.");
   }
   if (!contractId) {
-    throw new Error('Contract ID is required.');
+    throw new Error("Contract ID is required.");
   }
 
   const height = await getBestBlockHeight(args);
   const client = dashClient({ ...args, height });
   try {
-    
     const identity = await client.platform.identities.get(identityId);
     let document;
-    if (args.action === 'create') {
+    if (args.action === "create") {
       if (!args.documentData) {
-        throw new Error('document-data is required for create action');
+        throw new Error("document-data is required for create action");
       }
       // Create new document
       const docData = JSON.parse(args.documentData);
       document = await client.platform.documents.create(
         `myContract.${args.documentType}`,
         identity,
-        docData
+        docData,
       );
     } else {
       // For replace/delete, first fetch existing document
       const documentId = getDocumentId(args);
       if (!documentId) {
-        throw new Error('Document ID is required.');
+        throw new Error("Document ID is required.");
       }
       const [existingDocument] = await client.platform.documents.get(
         `myContract.${args.documentType}`,
-        { where: [['$id', '==', documentId]] }
+        { where: [["$id", "==", documentId]] },
       );
 
       if (!existingDocument) {
         throw new Error(`Document not found with ID: ${documentId}`);
       }
 
-      if (args.action === 'replace') {
+      if (args.action === "replace") {
         if (!args.documentData) {
-          throw new Error('document-data is required for replace action');
+          throw new Error("document-data is required for replace action");
         }
         // Update document with new data
         const docData = JSON.parse(args.documentData);
@@ -605,9 +661,9 @@ const submitDocument = async (args) => {
     }
 
     const documentBatch = {
-      create: args.action === 'create' ? [document] : [],
-      replace: args.action === 'replace' ? [document] : [],
-      delete: args.action === 'delete' ? [document] : [],
+      create: args.action === "create" ? [document] : [],
+      replace: args.action === "replace" ? [document] : [],
+      delete: args.action === "delete" ? [document] : [],
     };
 
     await client.platform.documents.broadcast(documentBatch, identity);
@@ -622,14 +678,14 @@ const retrieveDocuments = async (args, queryOpts = {}) => {
   const client = dashClient(args);
   try {
     if (documentId) {
-      queryOpts.where = [['$id', '==', documentId]];
+      queryOpts.where = [["$id", "==", documentId]];
     }
-    
+
     const documents = await client.platform.documents.get(
       `myContract.${args.documentType}`,
-      queryOpts
+      queryOpts,
     );
-    return documents.map(doc => doc.toJSON());
+    return documents.map((doc) => doc.toJSON());
   } finally {
     await client.disconnect();
   }
@@ -640,10 +696,10 @@ const deleteDocument = async (args) => {
   const documentId = getDocumentId(args);
 
   if (!identityId) {
-    throw new Error('Identity ID is required.');
+    throw new Error("Identity ID is required.");
   }
   if (!documentId) {
-    throw new Error('Document ID is required.');
+    throw new Error("Document ID is required.");
   }
 
   const height = await getBestBlockHeight(args);
@@ -652,7 +708,7 @@ const deleteDocument = async (args) => {
     const identity = await client.platform.identities.get(identityId);
     const [document] = await client.platform.documents.get(
       `myContract.${args.documentType}`,
-      { where: [['$id', '==', documentId]] }
+      { where: [["$id", "==", documentId]] },
     );
 
     if (!document) {
@@ -661,6 +717,86 @@ const deleteDocument = async (args) => {
 
     await client.platform.documents.broadcast({ delete: [document] }, identity);
     return document.toJSON();
+  } finally {
+    await client.disconnect();
+  }
+};
+
+// Key Management Functions
+const listIdentityPublicKeys = async (args) => {
+  let client;
+  try {
+    const identityId = getIdentityId(args);
+    if (!identityId) {
+      throw new Error("Identity ID is required");
+    }
+
+    const height = await getBestBlockHeight(args);
+    client = dashClient({ ...args, height });
+    const identity = await client.platform.identities.get(identityId);
+
+    if (!identity) {
+      throw {
+        code: "IDENTITY_NOT_FOUND",
+        message: "Identity not found",
+        suggestions: [
+          "Check if the identity ID is correct",
+          "Ensure the identity exists on the network",
+          "Verify network connectivity",
+        ],
+      };
+    }
+
+    const keys = identity.getPublicKeys();
+    // Return keys array converted to JSON-friendly format
+    return keys.map((key) => ({
+      id: key.getId().toString(),
+      type: key.getType(),
+      purpose: key.getPurpose(),
+      data: key.getData().toString("hex"),
+      readOnly: key.isReadOnly(),
+      disabledAt: key.getDisabledAt(),
+    }));
+  } catch (error) {
+    throw error;
+  } finally {
+    await client.disconnect();
+  }
+};
+
+const getPrivateKeyFromPublicKey = async (args) => {
+  const height = await getBestBlockHeight(args);
+  const client = walletClient({ ...args, height });
+
+  const account = await client.wallet.getAccount();
+  await account.isReady();
+
+  const identityId = getIdentityId(args);
+  const publicKeyId = args.publicKeyId;
+
+  if (!identityId || !publicKeyId) {
+    throw new Error("Identity ID and Public Key ID are required");
+  }
+
+  try {
+    // Get the key index from the identity's keys
+    const identity = await client.platform.identities.get(identityId);
+    const keys = identity.getPublicKeys();
+    const keyIndex = keys.findIndex(
+      (key) => key.getData().toString("hex") === publicKeyId,
+    );
+
+    if (keyIndex === -1) {
+      throw new Error("Public key not found in identity");
+    }
+
+    const privateKey = await client.wallet.identities.getIdentityHDKeyById(
+      identityId,
+      keyIndex,
+    );
+    return privateKey.privateKey.toString();
+  } catch (error) {
+    throw error;
   } finally {
     await client.disconnect();
   }
@@ -680,5 +816,7 @@ module.exports = {
   retrieveContractHistory,
   submitDocument,
   retrieveDocuments,
-  deleteDocument
-}
+  deleteDocument,
+  listIdentityPublicKeys,
+  getPrivateKeyFromPublicKey,
+};

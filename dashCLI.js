@@ -3,6 +3,25 @@ const dashLibrary = require('./dashLibrary');
 
 const LOG_LEVEL = process.env.LOG_LEVEL || 'error';
 
+const AVAILABLE_COMMANDS = [
+  'createWallet',
+  'getUnusedAddress',
+  'createIdentity',
+  'retrieveIdentity',
+  'topupIdentity',
+  'registerName',
+  'getIdentityIds',
+  'registerContract',
+  'updateContract',
+  'retrieveContract',
+  'retrieveContractHistory',
+  'submitDocument',
+  'retrieveDocuments',
+  'deleteDocument',
+  'listIdentityPublicKeys',
+  'getPrivateKey',
+];
+
 function log(level, ...args) {
   const levels = ['error', 'warn', 'info', 'debug'];
   const currentLevelIndex = levels.indexOf(LOG_LEVEL);
@@ -16,13 +35,16 @@ function log(level, ...args) {
 program
   .name('dashCLI')
   .description('CLI for Dash Platform operations')
-  .showHelpAfterError('Available commands: createWallet, getUnusedAddress, createIdentity, retrieveIdentity, topupIdentity, registerName, getIdentityIds, registerContract, updateContract, retrieveContract, retrieveContractHistory, submitDocument, retrieveDocuments, deleteDocument')
+  .showHelpAfterError(`Available commands: ${AVAILABLE_COMMANDS.join(', ')}`)
   .argument('<command>', 'Command to execute')
   .option('--network <network>', 'Network to use (mainnet/testnet)')
   .option('--identity-id <id>', 'Identity ID')
   .option('--height <height>', 'Block height')
   .option('--address <address>', 'Dash address to use')
-  .option('--topup-amount <topupAmount>', 'Amount for topup in duffs. Minumum 50000 duffs. 1 duff = 1,000 platform credits')
+  .option(
+    '--topup-amount <topupAmount>',
+    'Amount for topup in duffs. Minumum 50000 duffs. 1 duff = 1,000 platform credits',
+  )
   .option('--identity-name <identityName>', 'Identity name')
   .option('--contract-id <id>', 'Contract ID')
   .option('--document-type <type>', 'Document type')
@@ -34,30 +56,43 @@ program
   .option('--document-data <json>', 'Document data for create/update')
   .option('--query <json>', 'Query options for document retrieval')
   .option('--action <type>', 'Document action type (create/replace/delete)')
+  .option('--public-key-id <id>', 'Public key ID for private key retrieval')
   .action(async (command, options) => {
-    log('debug', "Command:", command);
-    log('debug', "Options:", options);
+    log('debug', 'Command:', command);
+    log('debug', 'Options:', options);
 
     try {
-      if (!command || !['createWallet', 'getUnusedAddress', 'createIdentity', 'retrieveIdentity', 'topupIdentity', 'registerName', 'getIdentityIds', 'registerContract', 'updateContract', 'retrieveContract', 'retrieveContractHistory', 'submitDocument', 'retrieveDocuments', 'deleteDocument'].includes(command)) {
-        throw new Error('Invalid command. Available commands: createWallet, getUnusedAddress, createIdentity, retrieveIdentity, topupIdentity, registerName, getIdentityIds, registerContract, updateContract, retrieveContract, retrieveContractHistory, submitDocument, retrieveDocuments, deleteDocument');
+      if (!command || !AVAILABLE_COMMANDS.includes(command)) {
+        throw new Error(
+          `Invalid command. Available commands: ${AVAILABLE_COMMANDS.join(', ')}`,
+        );
       }
 
       if (command === 'registerContract' && options.keepHistory === undefined) {
         options.keepHistory = false;
       }
-    
+
       if (!['createWallet'].includes(command) && !process.env.MNEMONIC) {
-        throw new Error('Please add your wallet mnemonic to the .env file as MNEMONIC=your_mnemonic');
+        throw new Error(
+          'Please add your wallet mnemonic to the .env file as MNEMONIC=your_mnemonic',
+        );
       }
 
       if (command === 'createWallet' && process.env.MNEMONIC) {
-        throw new Error('Cannot create a new wallet when MNEMONIC environment variable exists. Please remove MNEMONIC from .env file first.');
+        throw new Error(
+          'Cannot create a new wallet when MNEMONIC environment variable exists. Please remove MNEMONIC from .env file first.',
+        );
       }
 
       // Check for required address parameter
-      if (['createIdentity', 'topupIdentity'].includes(command) && !options.address && !process.env.ADDRESS) {
-        throw new Error(`${command} requires --address parameter or ADDRESS environment variable`);
+      if (
+        ['createIdentity', 'topupIdentity'].includes(command) &&
+        !options.address &&
+        !process.env.ADDRESS
+      ) {
+        throw new Error(
+          `${command} requires --address parameter or ADDRESS environment variable`,
+        );
       }
 
       // Set address from environment variable if not provided in options
@@ -105,7 +140,7 @@ program
           const nameRegistration = await dashLibrary.registerName(options);
           console.log('Name Registration:', nameRegistration);
           break;
-        
+
         case 'getIdentityIds':
           const identityIds = await dashLibrary.getIdentityIds(options);
           console.log('Identity IDs:', identityIds);
@@ -140,7 +175,8 @@ program
           break;
 
         case 'retrieveContractHistory':
-          const contractHistory = await dashLibrary.retrieveContractHistory(options);
+          const contractHistory =
+            await dashLibrary.retrieveContractHistory(options);
           console.log('Contract History:', contractHistory);
           break;
 
@@ -155,7 +191,9 @@ program
             throw new Error('Action (create/replace/delete) is required');
           }
           if (options.action !== 'delete' && !options.documentData) {
-            throw new Error('Document data is required for create/replace actions');
+            throw new Error(
+              'Document data is required for create/replace actions',
+            );
           }
           const submitResult = await dashLibrary.submitDocument(options);
           console.log('Document submitted:', submitResult);
@@ -185,8 +223,28 @@ program
           console.log('Document deleted:', deleteResult);
           break;
 
+        case 'listIdentityPublicKeys':
+          if (!options.identityId) {
+            throw new Error('Identity ID is required');
+          }
+          const publicKeys = await dashLibrary.listIdentityPublicKeys(options);
+          console.log('Public Keys:', publicKeys);
+          break;
+
+        case 'getPrivateKey':
+          if (!options.identityId) {
+            throw new Error('Identity ID is required');
+          }
+          if (!options.publicKeyId) {
+            throw new Error('Public key ID is required');
+          }
+          const privateKey =
+            await dashLibrary.getPrivateKeyFromPublicKey(options);
+          console.log('Private Key:', privateKey);
+          break;
+
         default:
-          console.log('Available commands: createWallet, getUnusedAddress, createIdentity, retrieveIdentity, topupIdentity, registerName, registerContract, updateContract, retrieveContract, retrieveContractHistory, submitDocument, retrieveDocuments, deleteDocument');
+          console.log(`Available commands: ${AVAILABLE_COMMANDS.join(', ')}`);
           break;
       }
     } catch (error) {
