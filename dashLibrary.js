@@ -1,4 +1,4 @@
-const { dashClient, walletClient } = require('./dashClient');
+const dashClient = require('./dashClient');
 const util = require('util');
 
 // Helper functions to get IDs from either command line args or environment variables
@@ -105,6 +105,8 @@ const validateContractDefinition = (contractDef) => {
 //Uses two APIs with fallback:
 //1. RPC API (primary) - Faster but may have temporary issues
 //2. Insight API (fallback) - More stable but slower
+// Finds the starting block height for a Dash address by looking up its first transaction
+// This optimizes wallet synchronization by starting from when the address was first used
 const findStartHeight = async (args) => {
   console.log('Finding the first transaction block for address');
   const address = getAddress(args);
@@ -269,7 +271,7 @@ const findStartHeight = async (args) => {
 // Helper function to get current best block height
 // Used for optimizing wallet sync
 const getBestBlockHeight = async (args) => {
-  const client = dashClient({ ...args });
+  const client = dashClient({ ...args, height: undefined });
   try {
     const height = await client.getDAPIClient().core.getBestBlockHeight();
     return height;
@@ -278,6 +280,8 @@ const getBestBlockHeight = async (args) => {
   }
 };
 
+// Gets an unused address from the wallet account
+// Used for receiving funds and creating new identities
 const getUnusedAddress = async (args) => {
   if (!process.env.MNEMONIC) {
     throw new Error('No wallet mnemonic configured');
@@ -295,6 +299,8 @@ const getUnusedAddress = async (args) => {
   }
 };
 
+// Creates a new wallet and returns its mnemonic phrase
+// This is used for initial wallet setup
 const createWallet = async (args) => {
   const client = dashClient(args);
   try {
@@ -306,6 +312,8 @@ const createWallet = async (args) => {
   }
 };
 
+// Creates a new identity on Dash Platform
+// Requires a funded address to pay for the registration
 const createIdentity = async (args) => {
   const address = getAddress(args);
   if (!address) {
@@ -320,10 +328,14 @@ const createIdentity = async (args) => {
   } catch (error) {
     throw new Error(`Failed to create identity: ${error.message}`);
   } finally {
-    await client.disconnect();
+    if (client && client.disconnect) {
+      await client.disconnect();
+    }
   }
 };
 
+// Retrieves identity details from Dash Platform by identity ID
+// Returns the full identity object with all associated data
 const retrieveIdentity = async (args) => {
   const identityId = getIdentityId(args);
   if (!identityId) {
@@ -338,6 +350,9 @@ const retrieveIdentity = async (args) => {
   }
 };
 
+// Adds credits to an identity for platform operations
+// Credits are required for name registration and document operations
+// The minimum topup amount is 50000 duffs which converts to 50,000,000 credits
 const topupIdentity = async (args) => {
   // Get values from either args or env vars
   const identityId = getIdentityId(args);
@@ -380,6 +395,8 @@ const topupIdentity = async (args) => {
   }
 };
 
+// Registers a name for a Dash Platform identity
+// The name must follow platform naming rules and be available
 const registerName = async (args) => {
   if (!args.identityName) {
     throw new Error('Identity Name is required.');
@@ -403,6 +420,8 @@ const registerName = async (args) => {
   }
 };
 
+// Retrieves all identity IDs associated with the current wallet
+// Useful for managing multiple identities
 const getIdentityIds = async (args) => {
   const height = await getBestBlockHeight(args);
   const client = dashClient({ ...args, height });
@@ -415,6 +434,8 @@ const getIdentityIds = async (args) => {
   }
 };
 
+// Registers a new data contract on Dash Platform
+// Handles contract validation, indices setup, and history configuration
 const registerContract = async (args) => {
   const identityId = getIdentityId(args);
   if (!identityId) {
@@ -467,6 +488,9 @@ const registerContract = async (args) => {
   }
 };
 
+// Updates an existing contract with new properties or indices
+// Handles schema validation and ensures backward compatibility
+// Requires the contract owner's identity for authorization
 const updateContract = async (args) => {
   const height = await getBestBlockHeight(args);
   const client = dashClient({ ...args, height });
@@ -490,7 +514,7 @@ const updateContract = async (args) => {
     );
     if (!documentSchema) {
       throw new Error(
-        `Document type '${args.documentType}' not found in contract`,
+        `Document type "${args.documentType}" not found in contract`,
       );
     }
 
@@ -514,11 +538,11 @@ const updateContract = async (args) => {
         }
         if (typeof propDef.position !== 'number') {
           throw new Error(
-            `Property '${propName}' must have a numeric position`,
+            `Property "${propName}" must have a numeric position`,
           );
         }
         if (!propDef.type) {
-          throw new Error(`Property '${propName}' must have a type`);
+          throw new Error(`Property "${propName}" must have a type`);
         }
       });
 
@@ -560,6 +584,8 @@ const updateContract = async (args) => {
   }
 };
 
+// Retrieves a contract's details by its ID
+// Returns the full contract object including schema and configuration
 const retrieveContract = async (args) => {
   const contractId = getContractId(args);
   if (!contractId) {
@@ -581,6 +607,8 @@ const retrieveContract = async (args) => {
   }
 };
 
+// Retrieves the revision history of a contract
+// Returns up to 10 most recent versions with timestamps
 const retrieveContractHistory = async (args) => {
   const contractId = getContractId(args);
   if (!contractId) {
@@ -605,6 +633,8 @@ const retrieveContractHistory = async (args) => {
   }
 };
 
+// Handles document creation, replacement, and deletion operations
+// Supports three actions: create, replace, and delete
 const submitDocument = async (args) => {
   const identityId = getIdentityId(args);
   const contractId = getContractId(args);
@@ -673,6 +703,8 @@ const submitDocument = async (args) => {
   }
 };
 
+// Retrieves documents from a contract based on query options
+// If documentId is provided, returns that specific document
 const retrieveDocuments = async (args, queryOpts = {}) => {
   const documentId = getDocumentId(args);
   const client = dashClient(args);
@@ -691,6 +723,8 @@ const retrieveDocuments = async (args, queryOpts = {}) => {
   }
 };
 
+// Deletes a specific document from a contract
+// Requires the document ID and appropriate identity permissions
 const deleteDocument = async (args) => {
   const identityId = getIdentityId(args);
   const documentId = getDocumentId(args);
@@ -722,31 +756,30 @@ const deleteDocument = async (args) => {
   }
 };
 
-// Key Management Functions
+// Lists all public keys associated with an identity
+// Returns key details including ID, type, purpose, and status
 const listIdentityPublicKeys = async (args) => {
-  let client;
+  const identityId = getIdentityId(args);
+  if (!identityId) {
+    throw new Error('Identity ID is required');
+  }
+
+  const height = await getBestBlockHeight(args);
+  client = dashClient({ ...args, height });
+  const identity = await client.platform.identities.get(identityId);
+
+  if (!identity) {
+    throw {
+      code: 'IDENTITY_NOT_FOUND',
+      message: 'Identity not found',
+      suggestions: [
+        'Check if the identity ID is correct',
+        'Ensure the identity exists on the network',
+        'Verify network connectivity',
+      ],
+    };
+  }
   try {
-    const identityId = getIdentityId(args);
-    if (!identityId) {
-      throw new Error('Identity ID is required');
-    }
-
-    const height = await getBestBlockHeight(args);
-    client = dashClient({ ...args, height });
-    const identity = await client.platform.identities.get(identityId);
-
-    if (!identity) {
-      throw {
-        code: 'IDENTITY_NOT_FOUND',
-        message: 'Identity not found',
-        suggestions: [
-          'Check if the identity ID is correct',
-          'Ensure the identity exists on the network',
-          'Verify network connectivity',
-        ],
-      };
-    }
-
     const keys = identity.getPublicKeys();
     // Return keys array converted to JSON-friendly format
     return keys.map((key) => ({
@@ -764,9 +797,12 @@ const listIdentityPublicKeys = async (args) => {
   }
 };
 
-const getPrivateKeyFromPublicKey = async (args) => {
+// Retrieves the private key corresponding to a public key
+// Used for key management and signing operations
+// Requires wallet access and proper authorization
+const getPrivateKey = async (args) => {
   const height = await getBestBlockHeight(args);
-  const client = walletClient({ ...args, height });
+  const client = dashClient({ ...args, height });
 
   const account = await client.wallet.getAccount();
   await account.isReady();
@@ -778,9 +814,23 @@ const getPrivateKeyFromPublicKey = async (args) => {
     throw new Error('Identity ID and Public Key ID are required');
   }
 
+  const identity = await client.platform.identities.get(identityId);
+
+  if (!identity) {
+    throw {
+      code: 'IDENTITY_NOT_FOUND',
+      message: 'Identity not found',
+      suggestions: [
+        'Check if the identity ID is correct',
+        'Ensure the identity exists on the network',
+        'Verify network connectivity',
+      ],
+    };
+  }
+
   try {
     // Get the key index from the identity's keys
-    const identity = await client.platform.identities.get(identityId);
+    // const identity = await client.platform.identities.get(identityId);
     const keys = identity.getPublicKeys();
     const keyIndex = keys.findIndex(
       (key) => key.getData().toString('hex') === publicKeyId,
@@ -818,5 +868,5 @@ module.exports = {
   retrieveDocuments,
   deleteDocument,
   listIdentityPublicKeys,
-  getPrivateKeyFromPublicKey,
+  getPrivateKey,
 };
